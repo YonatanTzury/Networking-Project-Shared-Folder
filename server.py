@@ -1,7 +1,7 @@
 import os
-import sys
 import json
 import base64
+import argparse
 
 from bottle import get, post, run, request
 
@@ -105,10 +105,22 @@ def rename(path):
 def main():
     global BASE_FOLDER
 
-    if len(sys.argv) >= 2:
-        BASE_FOLDER = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-b', '--bind-address', type=str,
+                    help='listening address', default='localhost')
+    parser.add_argument('-p', '--port', type=int,
+                    help='listentting port', default=8080)
+    parser.add_argument('mount_point', type=str,
+                    help='local folder path')
+   
+    args = parser.parse_args()
 
-    run(host='localhost', port=8080)
+    BASE_FOLDER = args.mount_point
+
+    if not os.path.exists(BASE_FOLDER):
+        os.mkdir(BASE_FOLDER)
+
+    run(host=args.bind_address, port=args.port)
 
 if __name__ == '__main__':
     main()

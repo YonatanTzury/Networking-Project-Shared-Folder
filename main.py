@@ -1,47 +1,48 @@
-import sys
+import os
 import base64
 import requests
+import argparse
 
 from errno import ENOENT
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
-SERVER_URL = 'http://localhost:8080'
-
-def get(path):
-    if path[0] != '/':
-        path = '/' + path
-
-    res = requests.get(SERVER_URL + path)
-    if res.status_code != 200:
-        raise Exception(f'Bed status code: {res.status_code}: {SERVER_URL + path}')
-
-    return res.json()
-
-def post(path, data):
-    if path[0] != '/':
-        path = '/' + path
-
-    res = requests.post(SERVER_URL + path, data=data)
-    if res.status_code != 200:
-        raise Exception(f'Bed status code: {res.status_code}: {SERVER_URL + path}')
-
-    return res.json()
 
 class RemoteFS(LoggingMixIn, Operations):
-    def __init__(self):
+    def __init__(self, server_url):
+        self.server_url = server_url
         self.fd = 0
 
+    def get(self, path):
+        if path[0] != '/':
+            path = '/' + path
+
+        res = requests.get(self.server_url + path)
+        if res.status_code != 200:
+            raise Exception(f'Bed status code: {res.status_code}: {path}')
+
+        return res.json()
+
+    def post(self, path, data):
+        if path[0] != '/':
+            path = '/' + path
+
+        res = requests.post(self.server_url + path, data=data)
+        if res.status_code != 200:
+            raise Exception(f'Bed status code: {res.status_code}: {path}')
+
+        return res.json()
+
     def create(self, path, mode):
-        get(f'/create/{mode}/{path}')
+        self.get(f'/create/{mode}/{path}')
 
         self.fd += 1
         return self.fd
 
     def release(self, path, fh):
-        print(f'release: {path}')
+        pass
 
     def getattr(self, path, fh=None):
-        attr = get(f'/getattr/{path}')
+        attr = self.get(f'/getattr/{path}')
         
         if attr is None:
             raise FuseOSError(ENOENT)
@@ -49,40 +50,45 @@ class RemoteFS(LoggingMixIn, Operations):
         return attr
 
     def mkdir(self, path, mode):
-        get(f'/mkdir/{mode}/{path}')
+        self.get(f'/mkdir/{mode}/{path}')
 
     def open(self, path, flags):
-        print(f'open: {path} : {flags}')
         self.fd += 1
         return self.fd
 
     def read(self, path, size, offset, fh):
-        return base64.decodebytes(get(f'/read/{size}/{offset}/{path}').encode())
+        return base64.decodebytes(self.get(f'/read/{size}/{offset}/{path}').encode())
 
     def readdir(self, path, fh):
-        files = get(f'/readdir/{path}')
+        files = self.get(f'/readdir/{path}')
         return ['.', '..'] + files
 
     def rename(self, old, new):
-        get(f'/rename/{old}?new={new}')
+        self.get(f'/rename/{old}?new={new}')
 
     def rmdir(self, path):
-        get(f'/rmdir/{path}')
+        self.get(f'/rmdir/{path}')
 
     def unlink(self, path):
-        get(f'/unlink/{path}')
+        self.get(f'/unlink/{path}')
 
     def write(self, path, data, offset, fh):
-        return post(f'/write/{offset}/{path}', data=data)
+        return self.post(f'/write/{offset}/{path}', data=data)
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(f'usage: {sys.argv[0]} <mountpoint>')
-        return
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--server-url', type=str,
+                    help='remote server url', default='http://localhost:8080')
+    parser.add_argument('mount_point', type=str,
+                    help='local folder path')
+   
+    args = parser.parse_args()
 
-    mount_point = sys.argv[1]
-    FUSE(RemoteFS(), mount_point, foreground=True)
+    if not os.path.exists(args.mount_point):
+        os.mkdir(args.mount_point)
+
+    FUSE(RemoteFS(args.server_url), args.mount_point, foreground=True)
 
 if __name__ == '__main__':
     main()
