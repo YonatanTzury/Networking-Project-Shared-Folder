@@ -3,20 +3,24 @@ import base64
 import requests
 import argparse
 
-from errno import ENOENT
+from errno import ENOENT, EBUSY
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 
 class RemoteFS(LoggingMixIn, Operations):
     def __init__(self, server_url):
         self.server_url = server_url
-        self.fd = 0
+        self.session = requests.session()
+        self.init_session()
+
+    def __del__(self):
+        self.get('/close_session')
 
     def get(self, path):
         if path[0] != '/':
             path = '/' + path
 
-        res = requests.get(self.server_url + path)
+        res = self.session.get(self.server_url + path)
         if res.status_code != 200:
             raise Exception(f'Bed status code: {res.status_code}: {path}')
 
@@ -26,20 +30,32 @@ class RemoteFS(LoggingMixIn, Operations):
         if path[0] != '/':
             path = '/' + path
 
-        res = requests.post(self.server_url + path, data=data)
+        res = self.session.post(self.server_url + path, data=data)
         if res.status_code != 200:
             raise Exception(f'Bed status code: {res.status_code}: {path}')
 
         return res.json()
+    
+    def init_session(self):
+        res = self.session.get(self.server_url + '/init_session')
+        if res.status_code != 200:
+            raise Exception('Failes initialise session')
 
     def create(self, path, mode):
-        self.get(f'/create/{mode}/{path}')
+        fd = self.get(f'/create/{mode}/{path}')
+        return fd
 
-        self.fd += 1
-        return self.fd
+    def truncate(self, path, length, fh=None):
+        return
+
+    def open(self, path, flags):
+        fd = self.get(f'/open/{flags}/{path}')
+        if fd < 0:
+            raise FuseOSError(EBUSY)
+        return fd
 
     def release(self, path, fh):
-        pass
+        self.get(f'/release/{fh}/{path}')
 
     def getattr(self, path, fh=None):
         attr = self.get(f'/getattr/{path}')
@@ -52,12 +68,8 @@ class RemoteFS(LoggingMixIn, Operations):
     def mkdir(self, path, mode):
         self.get(f'/mkdir/{mode}/{path}')
 
-    def open(self, path, flags):
-        self.fd += 1
-        return self.fd
-
     def read(self, path, size, offset, fh):
-        return base64.decodebytes(self.get(f'/read/{size}/{offset}/{path}').encode())
+        return base64.decodebytes(self.get(f'/read/{fh}/{size}/{offset}/{path}').encode())
 
     def readdir(self, path, fh):
         files = self.get(f'/readdir/{path}')
@@ -73,7 +85,7 @@ class RemoteFS(LoggingMixIn, Operations):
         self.get(f'/unlink/{path}')
 
     def write(self, path, data, offset, fh):
-        return self.post(f'/write/{offset}/{path}', data=data)
+        return self.post(f'/write/{fh}/{offset}/{path}', data=data)
 
 
 def main():
