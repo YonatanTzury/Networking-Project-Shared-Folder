@@ -216,7 +216,7 @@ def create(session_id, path, mode):
 def open_file(session_id, path, flags):
     global fam
 
-    if flags | os.O_WRONLY or flags | os.O_WRONLY:
+    if flags & (os.O_WRONLY | os.O_APPEND | os.O_RDWR):
         return fam.open_for_write(session_id, path)
 
     return fam.open_for_read(session_id, path)
