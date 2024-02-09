@@ -79,7 +79,8 @@ class FileAccessManagment(object):
         cur_handle =  self.handles.get(path, Handle())
         
         if cur_handle.writer is not None:
-            return -1
+            response.status = 403
+            return
 
         cur_handle.writer = session_id
         self.handles[path] = cur_handle
@@ -125,11 +126,11 @@ class FileAccessManagment(object):
         handle = self.handles.get(path)
         if handle is None:
             return False
-        
+
         if handle.writer is not None:
             return True
     
-        if len(handle.readers) > 0:
+        if len(handle.readers.keys()) > 0:
             return True
     
         return False
@@ -142,6 +143,8 @@ class FileAccessManagment(object):
             self.handles[path].writer = None
         else:
             self.handles[path].readers[session_id].remove(fd)
+            if len(self.handles[path].readers[session_id]) == 0:
+                del self.handles[path].readers[session_id]
         
         self.sessions[session_id][fd] = None
 
@@ -178,12 +181,9 @@ def init_session():
     response.set_cookie(SESSION_COOKIE_NAME, new_session_uuid, path='/')
 
 @get('/close_session')
-def init_session():
+@request_wrapper
+def close_session(session_id, _):
     global fam
-
-    session_id = request.get_cookie(SESSION_COOKIE_NAME)
-    if session_id is None:
-        return
 
     fam.close_session(session_id)
 
@@ -297,20 +297,21 @@ def unlink(_, path):
     global fam
 
     if fam.is_any_handle(path):
-        return -1
+        response.status = 403
+        return
 
-    os.unlink(path)
+    os.remove(path)
     return 0
 
 @get('/rmdir/<path:path>')
 @request_wrapper
-def rmdir(path):
+def rmdir(_, path):
     # Known issue - should handle edge cases better
     os.rmdir(path)
 
 @get('/rename/<path:path>')
 @request_wrapper
-def rename(path):
+def rename(_, path):
     global fam
 
     new = request.query['new']
@@ -318,7 +319,7 @@ def rename(path):
         new = new[1:]
 
     if fam.is_any_handle(path) or fam.is_any_handle(new):
-        return -1
+        response.status = 403
         
     os.rename(path, os.path.join(BASE_FOLDER, new))
     return 0
@@ -326,7 +327,7 @@ def rename(path):
 def main():
     global BASE_FOLDER
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-b', '--bind-address', type=str,
                     help='listening address', default='localhost')
     parser.add_argument('-p', '--port', type=int,
