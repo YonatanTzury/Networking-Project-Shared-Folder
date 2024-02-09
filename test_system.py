@@ -4,7 +4,7 @@ import pytest
 import shutil
 import subprocess
 
-AMOUNT_OF_CLIENTS = 2
+AMOUNT_OF_CLIENTS = 5
 TEST_FOLDER = '.test'
 TEST_LOGS = '.test_logs'
 
@@ -20,7 +20,6 @@ def is_lock(path):
 
     return failed
 
-# TODO FIX PATHS
 def setup_test():
     # Test client and server root folder
     if os.path.exists(TEST_FOLDER):
@@ -35,14 +34,15 @@ def setup_test():
     else:
         os.mkdir(TEST_LOGS)
 
+    cur_folder = os.path.dirname(os.path.realpath(__file__))
     print('[+] Ruuning server')
     log = open(os.path.join(TEST_LOGS, 'server.log'), 'w')
-    procs = [subprocess.Popen(['python3', '/tmp/Networking-Project-Shared-Folder/server.py', os.path.join(TEST_FOLDER, 'server')], stdout=log, stderr=log)]
+    procs = [subprocess.Popen(['python3', os.path.join(cur_folder, 'server.py'), os.path.join(TEST_FOLDER, 'server')], stdout=log, stderr=log)]
 
     for client_path in CLIENTS:
         print(f'[+] Ruuning client \'{client_path}\'')
         log = open(os.path.join(TEST_LOGS, f'{client_path[-1]}.log'), 'w')
-        procs.append(subprocess.Popen(['python3', '/tmp/Networking-Project-Shared-Folder/client.py', '-v', client_path], stdout=log, stderr=log))
+        procs.append(subprocess.Popen(['python3', os.path.join(cur_folder, 'client.py'), '-v', client_path], stdout=log, stderr=log))
 
     time.sleep(3)
 
