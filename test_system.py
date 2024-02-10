@@ -8,7 +8,7 @@ AMOUNT_OF_CLIENTS = 5
 TEST_FOLDER = '.test'
 TEST_LOGS = '.test_logs'
 
-CLIENTS = [os.path.join(TEST_FOLDER, f'client_{i}') for i in range(AMOUNT_OF_CLIENTS)]
+CLIENTS = []
 
 def is_lock(path):
     failed = False
@@ -58,9 +58,15 @@ def finish_test(procs):
     shutil.rmtree(TEST_FOLDER)
 
 @pytest.fixture(scope="session", autouse=True)
-def resource():
+def resource(pytestconfig):
+    global AMOUNT_OF_CLIENTS
+    global CLIENTS
+
+    AMOUNT_OF_CLIENTS = pytestconfig.getoption("clients")
     if AMOUNT_OF_CLIENTS < 2:
         raise Exception('AMOUNT_OF_CLIENTS should be 2 or more')
+
+    CLIENTS = [os.path.join(TEST_FOLDER, f'client_{i}') for i in range(AMOUNT_OF_CLIENTS)]
 
     procs = setup_test()
     yield "resource"
