@@ -14,11 +14,13 @@ SESSION_COOKIE_NAME = 'session-id'
 class FD():
     path: str
     is_write: bool = False
+
 @dataclass
 class Handle():
     def __init__(self):
         self.readers = dict() # Mapping[str, Sequence[int]] -- session_id -> fds
         self.writer = None
+
 class FileAccessManagment(object):
     """
     The FileAccessManagment (FAM) class respsosible for control the access to files on the server from diffrenct clients.
